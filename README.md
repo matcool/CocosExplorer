@@ -1,6 +1,6 @@
 # CocosExplorer
 
-*despite the name it onl works for gd*
+*despite the name it only works for gd*
 
 ![screenshot](https://i.imgur.com/dBBLV7O.png)
 
