@@ -3,8 +3,18 @@
 #include "opengl-imgui-hook/imgui_hook.h"
 #include <minhook/include/MinHook.h>
 
+
+#define _NODE_NAME(type) if (dynamic_cast<type*>(node)) return #type"";
+const char* getNodeName(CCNode* node) {
+    _NODE_NAME(CCMenu);
+    _NODE_NAME(CCLayer);
+    _NODE_NAME(CCSprite);
+    return "CCNode";
+}
+
 void generateTree(CCNode* node, int i = 0) {
-    if (ImGui::TreeNode(node, node->getTag() == -1 ? "[%d] 0x%p" : "[%d] 0x%p (%d)", i, node, node->getTag())) {
+    //                                                ew
+    if (ImGui::TreeNode(node, node->getTag() == -1 ? "[%d] %s" : "[%d] %s (%d)", i, getNodeName(node), node->getTag())) {
         if (ImGui::TreeNode(node + 1, "Attributes")) {
             auto pos = node->getPosition();
             float _pos[2] = { pos.x, pos.y };
@@ -23,6 +33,11 @@ void generateTree(CCNode* node, int i = 0) {
             node->setRotation(_rot[0]);
             node->setRotationX(_rot[1]);
             node->setRotationY(_rot[2]);
+
+            float _skew[2] = { node->getSkewX(), node->getSkewY() };
+            ImGui::InputFloat2("Skew", _skew);
+            node->setSkewX(_skew[0]);
+            node->setSkewY(_skew[1]);
 
             ImGui::TreePop();
         }
