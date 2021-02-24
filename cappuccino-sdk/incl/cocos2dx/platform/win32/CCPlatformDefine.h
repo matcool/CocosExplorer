@@ -5,7 +5,8 @@
 #include <string.h>
 #endif
 
-#define CC_DLL      __declspec(dllexport)
+// #define CC_DLL      __declspec(dllexport)
+#define CC_DLL
 
 #include <assert.h>
 

@@ -9,7 +9,10 @@
 
 // add headers that you want to pre-compile here
 #include "framework.h"
+// shut up cocos2d
+#pragma warning(push, 0)
 #include <cocos2d.h>
+#pragma warning(pop)
 using namespace cocos2d;
 
 #endif //PCH_H
