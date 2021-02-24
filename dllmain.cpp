@@ -9,6 +9,7 @@ const char* getNodeName(CCNode* node) {
     _NODE_NAME(CCMenu);
     _NODE_NAME(CCLayer);
     _NODE_NAME(CCSprite);
+    _NODE_NAME(CCScene);
     return "CCNode";
 }
 
@@ -16,28 +17,59 @@ void generateTree(CCNode* node, int i = 0) {
     //                                                ew
     if (ImGui::TreeNode(node, node->getTag() == -1 ? "[%d] %s" : "[%d] %s (%d)", i, getNodeName(node), node->getTag())) {
         if (ImGui::TreeNode(node + 1, "Attributes")) {
+            if (ImGui::Button("Delete")) {
+                node->removeFromParentAndCleanup(true);
+                ImGui::TreePop();
+                ImGui::TreePop();
+                return;
+            }
+
             auto pos = node->getPosition();
             float _pos[2] = { pos.x, pos.y };
             ImGui::InputFloat2("Position", _pos);
             node->setPosition({ _pos[0], _pos[1] });
 
-            // depending on the order only scale works or only x and y work
             float _scale[3] = { node->getScale(), node->getScaleX(), node->getScaleY() };
             ImGui::InputFloat3("Scale", _scale);
-            node->setScale(_scale[0]);
-            node->setScaleX(_scale[1]);
-            node->setScaleY(_scale[2]);
+            // amazing
+            if (node->getScale() != _scale[0])
+                node->setScale(_scale[0]);
+            else {
+                node->setScaleX(_scale[1]);
+                node->setScaleY(_scale[2]);
+            }
 
             float _rot[3] = { node->getRotation(), node->getRotationX(), node->getRotationY() };
             ImGui::InputFloat3("Rotation", _rot);
-            node->setRotation(_rot[0]);
-            node->setRotationX(_rot[1]);
-            node->setRotationY(_rot[2]);
+            if (node->getRotation() != _rot[0])
+                node->setRotation(_rot[0]);
+            else {
+                node->setRotationX(_rot[1]);
+                node->setRotationY(_rot[2]);
+            }
 
             float _skew[2] = { node->getSkewX(), node->getSkewY() };
             ImGui::InputFloat2("Skew", _skew);
             node->setSkewX(_skew[0]);
             node->setSkewY(_skew[1]);
+
+            int zOrder = node->getZOrder();
+            ImGui::InputInt("Z", &zOrder);
+            if (node->getZOrder() != zOrder)
+                node->setZOrder(zOrder);
+
+            if (dynamic_cast<CCRGBAProtocol*>(node) != nullptr) {
+                auto rgbaNode = dynamic_cast<CCRGBAProtocol*>(node);
+                auto color = rgbaNode->getColor();
+                float _color[4] = { color.r / 255.f, color.g / 255.f, color.b / 255.f, rgbaNode->getOpacity() / 255.f };
+                ImGui::ColorEdit4("Color", _color);
+                rgbaNode->setColor({
+                    static_cast<GLubyte>(_color[0] * 255),
+                    static_cast<GLubyte>(_color[1] * 255),
+                    static_cast<GLubyte>(_color[2] * 255)
+                });
+                rgbaNode->setOpacity(_color[3] * 255);
+            }
 
             ImGui::TreePop();
         }
