@@ -26,11 +26,11 @@ void generateTree(CCNode* node, int i = 0) {
 
             auto pos = node->getPosition();
             float _pos[2] = { pos.x, pos.y };
-            ImGui::InputFloat2("Position", _pos);
+            ImGui::DragFloat2("Position", _pos);
             node->setPosition({ _pos[0], _pos[1] });
 
             float _scale[3] = { node->getScale(), node->getScaleX(), node->getScaleY() };
-            ImGui::InputFloat3("Scale", _scale);
+            ImGui::DragFloat3("Scale", _scale, 0.025);
             // amazing
             if (node->getScale() != _scale[0])
                 node->setScale(_scale[0]);
@@ -40,7 +40,7 @@ void generateTree(CCNode* node, int i = 0) {
             }
 
             float _rot[3] = { node->getRotation(), node->getRotationX(), node->getRotationY() };
-            ImGui::InputFloat3("Rotation", _rot);
+            ImGui::DragFloat3("Rotation", _rot);
             if (node->getRotation() != _rot[0])
                 node->setRotation(_rot[0]);
             else {
@@ -49,7 +49,7 @@ void generateTree(CCNode* node, int i = 0) {
             }
 
             float _skew[2] = { node->getSkewX(), node->getSkewY() };
-            ImGui::InputFloat2("Skew", _skew);
+            ImGui::DragFloat2("Skew", _skew);
             node->setSkewX(_skew[0]);
             node->setSkewY(_skew[1]);
 
