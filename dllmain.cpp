@@ -6,12 +6,33 @@
 
 #define _NODE_NAME(type) if (dynamic_cast<type*>(node)) return #type"";
 const char* getNodeName(CCNode* node) {
+    _NODE_NAME(CCLabelBMFont);
+    _NODE_NAME(CCLabelTTF);
+    _NODE_NAME(CCMenuItemImage);
+    _NODE_NAME(CCMenuItemSpriteExtra);
+    _NODE_NAME(CCMenuItemSprite);
+    _NODE_NAME(CCMenuItemToggle);
+    _NODE_NAME(CCMenuItemLabel);
+    _NODE_NAME(CCMenuItem);
     _NODE_NAME(CCMenu);
+    _NODE_NAME(CCLayerGradient);
+    _NODE_NAME(CCLayerColor);
+    _NODE_NAME(CCLayerRGBA);
     _NODE_NAME(CCLayer);
     _NODE_NAME(CCSprite);
     _NODE_NAME(CCScene);
     return "CCNode";
 }
+
+void* schData;
+char schData2[256];
+class scheduleFunctions {
+public:
+    void labelSetString(float dt) {
+        auto label = static_cast<CCLabelProtocol*>(schData);
+        label->setString(schData2);
+    }
+};
 
 void generateTree(CCNode* node, int i = 0) {
     //                                                ew
@@ -22,6 +43,10 @@ void generateTree(CCNode* node, int i = 0) {
                 ImGui::TreePop();
                 ImGui::TreePop();
                 return;
+            }
+
+            if (node->getUserData()) {
+                ImGui::Text("User data: 0x%p", node->getUserData());
             }
 
             auto pos = node->getPosition();
@@ -69,6 +94,18 @@ void generateTree(CCNode* node, int i = 0) {
                     static_cast<GLubyte>(_color[2] * 255)
                 });
                 rgbaNode->setOpacity(_color[3] * 255);
+            }
+            if (dynamic_cast<CCLabelProtocol*>(node) != nullptr) {
+                auto labelNode = dynamic_cast<CCLabelProtocol*>(node);
+                auto labelStr = labelNode->getString();
+                strcpy_s(schData2, labelStr);
+                ImGui::InputText("Text", schData2, 256);
+                if (strcmp(schData2, labelStr)) {
+                    // there has to be a better way of passing data to the scheduled function
+                    // maybe find another way of running a function in the gd thread
+                    schData = labelNode;
+                    CCDirector::sharedDirector()->getRunningScene()->scheduleOnce(schedule_selector(scheduleFunctions::labelSetString), 0);
+                }
             }
 
             ImGui::TreePop();
