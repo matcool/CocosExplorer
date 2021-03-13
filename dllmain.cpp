@@ -4,6 +4,7 @@
 #include <minhook/include/MinHook.h>
 #include <queue>
 #include <mutex>
+#include <fstream>
 
 #define _NODE_NAME(type) if (dynamic_cast<type*>(node)) return #type"";
 const char* getNodeName(CCNode* node) {
@@ -104,11 +105,12 @@ void generateTree(CCNode* node, unsigned int i = 0) {
                             else
                                 sprite = CCSprite::create(text);
                             _child = CCMenuItemSpriteExtra::create(sprite, sprite, nullptr, nullptr);
+                            break;
                         }
                         default:
                             return;
                         }
-                        if (_child) {
+                        if (_child != nullptr) {
                             _child->setTag(tag);
                             node->addChild(_child);
                         }
@@ -243,6 +245,13 @@ void __fastcall schUpdateHook(CCScheduler* self, void*, float dt) {
 }
 
 DWORD WINAPI my_thread(void* hModule) {
+#if 0
+    AllocConsole();
+    freopen_s(reinterpret_cast<FILE**>(stdout), "CONOUT$", "w", stdout);
+    freopen_s(reinterpret_cast<FILE**>(stdin), "CONIN$", "r", stdin);
+    static std::ofstream conout("CONOUT$", std::ios::out);
+    std::cout.rdbuf(conout.rdbuf());
+#endif
     ImGuiHook::Main(hModule);
     auto cocosBase = GetModuleHandleA("libcocos2d.dll");
     auto dispatchAddr = GetProcAddress(cocosBase, "?dispatchKeyboardMSG@CCKeyboardDispatcher@cocos2d@@QAE_NW4enumKeyCodes@2@_N@Z");
