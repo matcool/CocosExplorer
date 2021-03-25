@@ -6,25 +6,12 @@
 #include <mutex>
 #include <fstream>
 
-#define _NODE_NAME(type) if (dynamic_cast<type*>(node)) return #type"";
 const char* getNodeName(CCNode* node) {
-    _NODE_NAME(CCLabelBMFont);
-    _NODE_NAME(CCLabelTTF);
-    _NODE_NAME(CCMenuItemImage);
-    _NODE_NAME(CCMenuItemSpriteExtra);
-    _NODE_NAME(CCMenuItemSprite);
-    _NODE_NAME(CCMenuItemToggle);
-    _NODE_NAME(CCMenuItemLabel);
-    _NODE_NAME(CCMenuItem);
-    _NODE_NAME(CCMenu);
-    _NODE_NAME(CCLayerGradient);
-    _NODE_NAME(CCLayerColor);
-    _NODE_NAME(CCLayerRGBA);
-    _NODE_NAME(CCLayer);
-    _NODE_NAME(CCSprite);
-    _NODE_NAME(CCScene);
-    _NODE_NAME(CCNodeRGBA);
-    return "CCNode";
+    const char* name = typeid(*node).name() + 6;
+    /*if (name[0] == 'c' && name[1] == 'o' && name[2] == 'c' && name[3] == 'o' && name[4] == 's') {
+        return name + 7;
+    }*/
+    return name;
 }
 
 std::queue<std::function<void()>> threadFunctions;
@@ -159,10 +146,19 @@ void generateTree(CCNode* node, unsigned int i = 0) {
             node->setSkewX(_skew[0]);
             node->setSkewY(_skew[1]);
 
+            auto anchor = node->getAnchorPoint();
+            ImGui::DragFloat2("Anchor Point", &anchor.x, 0.05f, 0.f, 1.f);
+            node->setAnchorPoint(anchor);
+
             int zOrder = node->getZOrder();
             ImGui::InputInt("Z", &zOrder);
             if (node->getZOrder() != zOrder)
                 node->setZOrder(zOrder);
+            
+            auto visible = node->isVisible();
+            ImGui::Checkbox("Visible", &visible);
+            if (visible != node->isVisible())
+                node->setVisible(visible);
 
             if (dynamic_cast<CCRGBAProtocol*>(node) != nullptr) {
                 auto rgbaNode = dynamic_cast<CCRGBAProtocol*>(node);
@@ -183,10 +179,9 @@ void generateTree(CCNode* node, unsigned int i = 0) {
                 strcpy_s(text, labelStr);
                 ImGui::InputText("Text", text, 256);
                 if (strcmp(text, labelStr)) {
-                    std::string _text(text);
                     threadFunctionsMutex.lock();
-                    threadFunctions.push([labelNode, _text]() {
-                        labelNode->setString(_text.c_str());
+                    threadFunctions.push([labelNode, text]() {
+                        labelNode->setString(text);
                     });
                     threadFunctionsMutex.unlock();
                 }
@@ -204,37 +199,34 @@ void generateTree(CCNode* node, unsigned int i = 0) {
     }
 }
 
+bool g_showWindow = true;
+
 void RenderMain() {
-    auto& style = ImGui::GetStyle();
-    style.ColorButtonPosition = ImGuiDir_Left;
-    // ImGui::ShowDemoWindow();
-    if (ImGui::Begin("cocos2d explorer"), nullptr, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_AlwaysHorizontalScrollbar) {
-        auto director = cocos2d::CCDirector::sharedDirector();
-        // thank u andre
-        const bool enableTouch = !ImGui::GetIO().WantCaptureMouse;
-        director->getTouchDispatcher()->setDispatchEvents(enableTouch);
-        auto curScene = director->getRunningScene();
-        generateTree(curScene);
+    if (g_showWindow) {
+        auto& style = ImGui::GetStyle();
+        style.ColorButtonPosition = ImGuiDir_Left;
+
+        if (ImGui::Begin("cocos2d explorer"), nullptr, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_AlwaysHorizontalScrollbar) {
+            auto director = CCDirector::sharedDirector();
+            // thank u andre
+            const bool enableTouch = !ImGui::GetIO().WantCaptureMouse;
+            director->getTouchDispatcher()->setDispatchEvents(enableTouch);
+            auto curScene = director->getRunningScene();
+            generateTree(curScene);
+        }
+        ImGui::End();
     }
-    ImGui::End();
 }
 
 inline void(__thiscall* dispatchKeyboardMSG)(void* self, int key, bool down);
 void __fastcall dispatchKeyboardMSGHook(void* self, void*, int key, bool down) {
     if (ImGui::GetIO().WantCaptureKeyboard) return;
+    else if (down && key == 'K') g_showWindow ^= 1;
     dispatchKeyboardMSG(self, key, down);
 }
 
 inline void(__thiscall* schUpdate)(CCScheduler* self, float dt);
 void __fastcall schUpdateHook(CCScheduler* self, void*, float dt) {
-    /*while (!threadActions.empty()) {
-        auto action = threadActions.back();
-        if (action.type == ThreadActionType::LABEL_SET_STRING) {
-            auto data = action.data.labelSetString;
-            data.node->setString(data.string);
-        }
-        threadActions.pop();
-    }*/
     threadFunctionsMutex.lock();
     while (!threadFunctions.empty()) {
         threadFunctions.back()();
@@ -260,6 +252,7 @@ DWORD WINAPI my_thread(void* hModule) {
     auto schUpdateAddr = GetProcAddress(cocosBase, "?update@CCScheduler@cocos2d@@UAEXM@Z");
     MH_CreateHook(schUpdateAddr, &schUpdateHook, reinterpret_cast<void**>(&schUpdate));
     MH_EnableHook(schUpdateAddr);
+
     return 0;
 }
 
