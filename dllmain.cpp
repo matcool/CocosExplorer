@@ -206,11 +206,11 @@ void RenderMain() {
         auto& style = ImGui::GetStyle();
         style.ColorButtonPosition = ImGuiDir_Left;
 
+        auto director = CCDirector::sharedDirector();
+        // thx andre
+        const bool enableTouch = !ImGui::GetIO().WantCaptureMouse;
+        director->getTouchDispatcher()->setDispatchEvents(enableTouch);
         if (ImGui::Begin("cocos2d explorer"), nullptr, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_AlwaysHorizontalScrollbar) {
-            auto director = CCDirector::sharedDirector();
-            // thank u andre
-            const bool enableTouch = !ImGui::GetIO().WantCaptureMouse;
-            director->getTouchDispatcher()->setDispatchEvents(enableTouch);
             auto curScene = director->getRunningScene();
             generateTree(curScene);
         }
@@ -221,7 +221,11 @@ void RenderMain() {
 inline void(__thiscall* dispatchKeyboardMSG)(void* self, int key, bool down);
 void __fastcall dispatchKeyboardMSGHook(void* self, void*, int key, bool down) {
     if (ImGui::GetIO().WantCaptureKeyboard) return;
-    else if (down && key == 'K') g_showWindow ^= 1;
+    else if (down && key == 'K') {
+        g_showWindow ^= 1;
+        if (!g_showWindow)
+            CCDirector::sharedDirector()->getTouchDispatcher()->setDispatchEvents(true);
+    }
     dispatchKeyboardMSG(self, key, down);
 }
 
