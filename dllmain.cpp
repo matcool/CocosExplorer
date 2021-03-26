@@ -14,6 +14,17 @@ const char* getNodeName(CCNode* node) {
     return name;
 }
 
+void clipboardText(const char* text) {
+    if (!OpenClipboard(NULL)) return;
+    if (!EmptyClipboard()) return;
+    auto len = std::strlen(text);
+    auto mem = GlobalAlloc(GMEM_MOVEABLE, len + 1);
+    memcpy(GlobalLock(mem), text, len + 1);
+    GlobalUnlock(mem);
+    SetClipboardData(CF_TEXT, mem);
+    CloseClipboard();
+}
+
 std::queue<std::function<void()>> threadFunctions;
 std::mutex threadFunctionsMutex;
 
@@ -113,6 +124,12 @@ void generateTree(CCNode* node, unsigned int i = 0) {
                 ImGui::EndPopup();
             }
             ImGui::Text("Addr: 0x%p", node);
+            ImGui::SameLine();
+            if (ImGui::Button("Copy")) {
+                std::stringstream stream;
+                stream << std::uppercase << std::hex << reinterpret_cast<uintptr_t>(node);
+                clipboardText(stream.str().c_str());
+            }
             if (node->getUserData()) {
                 ImGui::Text("User data: 0x%p", node->getUserData());
             }
