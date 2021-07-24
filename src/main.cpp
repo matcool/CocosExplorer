@@ -27,6 +27,8 @@ void clipboardText(const char* text) {
     CloseClipboard();
 }
 
+bool operator!=(const CCSize& a, const CCSize& b) { return a.width != b.width || a.height != b.height; }
+
 std::queue<std::function<void()>> threadFunctions;
 std::mutex threadFunctionsMutex;
 
@@ -174,6 +176,11 @@ void generateTree(CCNode* node, unsigned int i = 0) {
             auto anchor = node->getAnchorPoint();
             ImGui::DragFloat2("Anchor Point", &anchor.x, 0.05f, 0.f, 1.f);
             node->setAnchorPoint(anchor);
+
+            auto contentSize = node->getContentSize();
+            ImGui::DragFloat2("Content Size", &contentSize.width);
+            if (contentSize != node->getContentSize())
+                node->setContentSize(contentSize);
 
             int zOrder = node->getZOrder();
             ImGui::InputInt("Z", &zOrder);
