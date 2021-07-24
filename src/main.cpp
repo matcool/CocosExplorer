@@ -7,6 +7,7 @@
 #include <queue>
 #include <mutex>
 #include <fstream>
+#include <sstream>
 
 using namespace cocos2d;
 
@@ -30,7 +31,14 @@ std::queue<std::function<void()>> threadFunctions;
 std::mutex threadFunctionsMutex;
 
 void generateTree(CCNode* node, unsigned int i = 0) {
-    if (ImGui::TreeNode(node, node->getTag() == -1 ? "[%d] %s" : "[%d] %s (%d)", i, getNodeName(node), node->getTag())) {
+    std::stringstream stream;
+    stream << "[" << i << "] " << getNodeName(node);
+    if (node->getTag() != -1)
+        stream << " (" << node->getTag() << ")";
+    const auto childrenCount = node->getChildrenCount();
+    if (childrenCount)
+        stream << " {" << childrenCount << "}";
+    if (ImGui::TreeNode(node, stream.str().c_str())) {
         if (ImGui::TreeNode(node + 1, "Attributes")) {
             if (ImGui::Button("Delete")) {
                 node->removeFromParentAndCleanup(true);
