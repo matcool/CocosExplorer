@@ -32,6 +32,26 @@ bool operator!=(const CCSize& a, const CCSize& b) { return a.width != b.width ||
 std::queue<std::function<void()>> threadFunctions;
 std::mutex threadFunctionsMutex;
 
+ImVec2 toVec2(const CCPoint& a) {
+    const auto size = ImGui::GetMainViewport()->Size;
+    const auto winSize = CCDirector::sharedDirector()->getWinSize();
+    return {
+        a.x / winSize.width * size.x,
+        (1.f - a.y / winSize.height) * size.y
+    };
+}
+
+ImVec2 toVec2(const CCSize& a) {
+    const auto size = ImGui::GetMainViewport()->Size;
+    const auto winSize = CCDirector::sharedDirector()->getWinSize();
+    return {
+        a.width / winSize.width * size.x,
+        a.height / winSize.height * size.y
+    };
+}
+
+CCNode* g_node = nullptr;
+
 void generateTree(CCNode* node, unsigned int i = 0) {
     std::stringstream stream;
     stream << "[" << i << "] " << getNodeName(node);
@@ -47,6 +67,13 @@ void generateTree(CCNode* node, unsigned int i = 0) {
                 ImGui::TreePop();
                 ImGui::TreePop();
                 return;
+            }
+            {
+                auto& foreground = *ImGui::GetForegroundDrawList();
+                auto pos = toVec2(node->convertToWorldSpace(node->getPosition()));
+                auto size = toVec2(node->getScaledContentSize());
+                // just assume its anchor point is 0.5 0.5 cuz im lazy
+                foreground.AddRectFilled({pos.x - size.x / 2.f, pos.y - size.y / 2.f}, {pos.x + size.x / 2.f, pos.y + size.y / 2.f}, 0x50FFFFFF);
             }
             ImGui::SameLine();
             if (ImGui::Button("Add Child")) {
@@ -247,6 +274,11 @@ void RenderMain() {
             generateTree(curScene);
         }
         ImGui::End();
+    } else {
+        auto& io = ImGui::GetIO();
+        io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
+        io.MouseDrawCursor = false;
+        CCDirector::sharedDirector()->getOpenGLView()->showCursor(false);
     }
 }
 
@@ -308,7 +340,7 @@ DWORD WINAPI my_thread(void* hModule) {
 
 BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID _) {
     if (reason == DLL_PROCESS_ATTACH) {
-        CreateThread(0, 0x1000, my_thread, module, 0, 0);
+        CreateThread(0, 0, my_thread, module, 0, 0);
         ImGuiHook::Load(RenderMain);
     }
     return TRUE;
