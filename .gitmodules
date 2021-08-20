@@ -4,6 +4,3 @@
 [submodule "libraries/minhook"]
 	path = libraries/minhook
 	url = https://github.com/TsudaKageyu/minhook
-[submodule "libraries/imgui-hook"]
-	path = libraries/imgui-hook
-	url = https://github.com/adafcaefc/Universal-OpenGL-2-Kiero-Hook.git
