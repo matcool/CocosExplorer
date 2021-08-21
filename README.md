@@ -5,8 +5,7 @@
 ![screenshot](https://i.imgur.com/dBBLV7O.png)
 
 # Credits
+- [Aly](https://github.com/s5bug) for her imgui hook
 - [Universal OpenGL 2 ImGUI Hook](https://github.com/adafcaefc/Universal-OpenGL-2-Kiero-Hook)
-- [CappuccinoSDK](https://github.com/AndreNIH/CappuccinoSDK)
 - [Andre](https://github.com/AndreNih) is awesome
 - 👍
-- gdp

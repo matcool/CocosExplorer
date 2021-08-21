@@ -2,12 +2,12 @@
 #include <windows.h>
 #include <cocos2d.h>
 #include <imgui.h>
-#include <imgui_hook.h>
 #include <MinHook.h>
 #include <queue>
 #include <mutex>
 #include <fstream>
 #include <sstream>
+#include <imgui-hook.hpp>
 
 using namespace cocos2d;
 
@@ -260,37 +260,18 @@ void generateTree(CCNode* node, unsigned int i = 0) {
 
 bool g_showWindow = true;
 
-void RenderMain() {
+void draw() {
     if (g_showWindow) {
         auto& style = ImGui::GetStyle();
         style.ColorButtonPosition = ImGuiDir_Left;
 
         auto director = CCDirector::sharedDirector();
-        // thx andre
-        const bool enableTouch = !ImGui::GetIO().WantCaptureMouse;
-        director->getTouchDispatcher()->setDispatchEvents(enableTouch);
         if (ImGui::Begin("cocos2d explorer"), nullptr, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_AlwaysHorizontalScrollbar) {
             auto curScene = director->getRunningScene();
             generateTree(curScene);
         }
         ImGui::End();
-    } else {
-        auto& io = ImGui::GetIO();
-        io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
-        io.MouseDrawCursor = false;
-        CCDirector::sharedDirector()->getOpenGLView()->showCursor(false);
     }
-}
-
-inline void(__thiscall* dispatchKeyboardMSG)(void* self, int key, bool down);
-void __fastcall dispatchKeyboardMSGHook(void* self, void*, int key, bool down) {
-    if (ImGui::GetIO().WantCaptureKeyboard) return;
-    else if (down && key == 'K') {
-        g_showWindow ^= 1;
-        if (!g_showWindow)
-            CCDirector::sharedDirector()->getTouchDispatcher()->setDispatchEvents(true);
-    }
-    dispatchKeyboardMSG(self, key, down);
 }
 
 inline void(__thiscall* schUpdate)(CCScheduler* self, float dt);
@@ -304,44 +285,56 @@ void __fastcall schUpdateHook(CCScheduler* self, void*, float dt) {
     return schUpdate(self, dt);
 }
 
+#define _CONSOLE
+
 DWORD WINAPI my_thread(void* hModule) {
-#if _DEBUG
+#ifdef _CONSOLE
     AllocConsole();
     std::ofstream conout("CONOUT$", std::ios::out);
     std::ifstream conin("CONIN$", std::ios::in);
     std::cout.rdbuf(conout.rdbuf());
-    std::cin.rdbuf(conin.rdbuf());  
+    std::cin.rdbuf(conin.rdbuf());
 #endif
+
+    ImGuiHook::setRenderFunction(draw);
+    ImGuiHook::setToggleCallback([]() {
+        g_showWindow = !g_showWindow;
+    });
     auto cocosBase = GetModuleHandleA("libcocos2d.dll");
-    MH_CreateHook(
-        GetProcAddress(cocosBase, "?dispatchKeyboardMSG@CCKeyboardDispatcher@cocos2d@@QAE_NW4enumKeyCodes@2@_N@Z"),
-        &dispatchKeyboardMSGHook,
-        reinterpret_cast<void**>(&dispatchKeyboardMSG)
-    );
+    MH_Initialize();
     MH_CreateHook(
         GetProcAddress(cocosBase, "?update@CCScheduler@cocos2d@@UAEXM@Z"),
         &schUpdateHook,
         reinterpret_cast<void**>(&schUpdate)
     );
+    ImGuiHook::setupHooks([](void* target, void* hook, void** trampoline) {
+        MH_CreateHook(target, hook, trampoline);
+    });
     MH_EnableHook(MH_ALL_HOOKS);
 
-#if 0
+#ifdef _CONSOLE
     std::getline(std::cin, std::string());
 
+    // crashes lol
+    // ImGui_ImplOpenGL3_Shutdown();
+    // ImGui_ImplWin32_Shutdown();
+    // ImGui::DestroyContext();
+    
     MH_Uninitialize();
+
     conout.close();
     conin.close();
     FreeConsole();
-    ImGuiHook::Unload();
     FreeLibraryAndExitThread(reinterpret_cast<HMODULE>(hModule), 0);
 #endif
+
     return 0;
 }
 
-BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID _) {
+BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID) {
     if (reason == DLL_PROCESS_ATTACH) {
+        DisableThreadLibraryCalls(module);
         CreateThread(0, 0, my_thread, module, 0, 0);
-        ImGuiHook::Load(RenderMain);
     }
     return TRUE;
 }
