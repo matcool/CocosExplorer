@@ -12,28 +12,28 @@
 using namespace cocos2d;
 
 const char* getNodeName(CCNode* node) {
-    const char* name = typeid(*node).name() + 6;
-    return name;
+    return typeid(*node).name() + 6;
 }
 
-void clipboardText(const char* text) {
+void clipboardText(const std::string& text) {
     if (!OpenClipboard(NULL)) return;
     if (!EmptyClipboard()) return;
-    auto len = std::strlen(text);
+    const auto len = text.size();
     auto mem = GlobalAlloc(GMEM_MOVEABLE, len + 1);
-    memcpy(GlobalLock(mem), text, len + 1);
+    memcpy(GlobalLock(mem), text.c_str(), len + 1);
     GlobalUnlock(mem);
     SetClipboardData(CF_TEXT, mem);
     CloseClipboard();
 }
 
 bool operator!=(const CCSize& a, const CCSize& b) { return a.width != b.width || a.height != b.height; }
-
-std::queue<std::function<void()>> threadFunctions;
-std::mutex threadFunctionsMutex;
+ImVec2 operator*(const ImVec2& vec, const float m) { return {vec.x * m, vec.y * m}; }
+ImVec2 operator/(const ImVec2& vec, const float m) { return {vec.x / m, vec.y / m}; }
+ImVec2 operator+(const ImVec2& a, const ImVec2& b) { return {a.x + b.x, a.y + b.y}; }
+ImVec2 operator-(const ImVec2& a, const ImVec2& b) { return {a.x - b.x, a.y - b.y}; }
 
 ImVec2 toVec2(const CCPoint& a) {
-    const auto size = ImGui::GetMainViewport()->Size;
+    const auto size = ImGui::GetMainViewport()->Size * 0.5f; // ???
     const auto winSize = CCDirector::sharedDirector()->getWinSize();
     return {
         a.x / winSize.width * size.x,
@@ -68,13 +68,16 @@ void generateTree(CCNode* node, unsigned int i = 0) {
                 ImGui::TreePop();
                 return;
             }
+            // it just doesnt work
+            #if 0
             {
                 auto& foreground = *ImGui::GetForegroundDrawList();
                 auto pos = toVec2(node->convertToWorldSpace(node->getPosition()));
                 auto size = toVec2(node->getScaledContentSize());
                 // just assume its anchor point is 0.5 0.5 cuz im lazy
-                foreground.AddRectFilled({pos.x - size.x / 2.f, pos.y - size.y / 2.f}, {pos.x + size.x / 2.f, pos.y + size.y / 2.f}, 0x50FFFFFF);
+                foreground.AddRectFilled(pos - size / 2.f, pos + size / 2.f, 0x50FFFFFF);
             }
+            #endif
             ImGui::SameLine();
             if (ImGui::Button("Add Child")) {
                 ImGui::OpenPopup("Add Child");
@@ -107,50 +110,44 @@ void generateTree(CCNode* node, unsigned int i = 0) {
                 ImGui::Separator();
 
                 if (ImGui::Button("Add")) {
-                    threadFunctionsMutex.lock();
-                    threadFunctions.push([node] {
-                        CCNode* _child = nullptr;
-                        switch (item) {
-                        case 0:
-                            _child = CCNode::create();
-                            break;
-                        case 1: {
-                            auto child = CCLabelBMFont::create(text, labelFont);
-                            _child = child;
-                            break;
-                        }
-                        case 2: {
-                            auto child = CCLabelTTF::create(text, "Arial", fontSize);
-                            _child = child;
-                            break;
-                        }
-                        case 3: {
-                            CCSprite* child;
-                            if (frame)
-                                child = CCSprite::createWithSpriteFrameName(text);
-                            else
-                                child = CCSprite::create(text);
-                            _child = child;
-                            break;
-                        }
-                        case 4: {
-                            CCSprite* sprite;
-                            if (frame)
-                                sprite = CCSprite::createWithSpriteFrameName(text);
-                            else
-                                sprite = CCSprite::create(text);
-                            // _child = CCMenuItemSpriteExtra::create(sprite, sprite, nullptr, nullptr);
-                            break;
-                        }
-                        default:
-                            return;
-                        }
-                        if (_child != nullptr) {
-                            _child->setTag(tag);
-                            node->addChild(_child);
-                        }
-                    });
-                    threadFunctionsMutex.unlock();
+                    CCNode* _child = nullptr;
+                    switch (item) {
+                    case 0:
+                        _child = CCNode::create();
+                        break;
+                    case 1: {
+                        auto child = CCLabelBMFont::create(text, labelFont);
+                        _child = child;
+                        break;
+                    }
+                    case 2: {
+                        auto child = CCLabelTTF::create(text, "Arial", fontSize);
+                        _child = child;
+                        break;
+                    }
+                    case 3: {
+                        CCSprite* child;
+                        if (frame)
+                            child = CCSprite::createWithSpriteFrameName(text);
+                        else
+                            child = CCSprite::create(text);
+                        _child = child;
+                        break;
+                    }
+                    case 4: {
+                        CCSprite* sprite;
+                        if (frame)
+                            sprite = CCSprite::createWithSpriteFrameName(text);
+                        else
+                            sprite = CCSprite::create(text);
+                        // _child = CCMenuItemSpriteExtra::create(sprite, sprite, nullptr, nullptr);
+                        break;
+                    }
+                    }
+                    if (_child != nullptr) {
+                        _child->setTag(tag);
+                        node->addChild(_child);
+                    }
 
                     ImGui::CloseCurrentPopup();
                 }
@@ -165,7 +162,7 @@ void generateTree(CCNode* node, unsigned int i = 0) {
             if (ImGui::Button("Copy")) {
                 std::stringstream stream;
                 stream << std::uppercase << std::hex << reinterpret_cast<uintptr_t>(node);
-                clipboardText(stream.str().c_str());
+                clipboardText(stream.str());
             }
             if (node->getUserData()) {
                 ImGui::Text("User data: 0x%p", node->getUserData());
@@ -238,11 +235,7 @@ void generateTree(CCNode* node, unsigned int i = 0) {
                 strcpy_s(text, labelStr);
                 ImGui::InputText("Text", text, 256);
                 if (strcmp(text, labelStr)) {
-                    threadFunctionsMutex.lock();
-                    threadFunctions.push([labelNode, text]() {
-                        labelNode->setString(text);
-                    });
-                    threadFunctionsMutex.unlock();
+                    labelNode->setString(text);
                 }
             }
 
@@ -274,17 +267,6 @@ void draw() {
     }
 }
 
-inline void(__thiscall* schUpdate)(CCScheduler* self, float dt);
-void __fastcall schUpdateHook(CCScheduler* self, void*, float dt) {
-    threadFunctionsMutex.lock();
-    while (!threadFunctions.empty()) {
-        threadFunctions.back()();
-        threadFunctions.pop();
-    }
-    threadFunctionsMutex.unlock();
-    return schUpdate(self, dt);
-}
-
 #define _CONSOLE
 
 DWORD WINAPI my_thread(void* hModule) {
@@ -302,11 +284,6 @@ DWORD WINAPI my_thread(void* hModule) {
     });
     auto cocosBase = GetModuleHandleA("libcocos2d.dll");
     MH_Initialize();
-    MH_CreateHook(
-        GetProcAddress(cocosBase, "?update@CCScheduler@cocos2d@@UAEXM@Z"),
-        &schUpdateHook,
-        reinterpret_cast<void**>(&schUpdate)
-    );
     ImGuiHook::setupHooks([](void* target, void* hook, void** trampoline) {
         MH_CreateHook(target, hook, trampoline);
     });
