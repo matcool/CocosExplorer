@@ -62,6 +62,8 @@ void generateTree(CCNode* node, unsigned int i = 0) {
     const auto childrenCount = node->getChildrenCount();
     if (childrenCount)
         stream << " {" << childrenCount << "}";
+    auto visible = node->isVisible();
+    ImGui::PushStyleColor(ImGuiCol_Text, visible ? ImVec4{ 1.f, 1.f, 1.f, 1.f } : ImVec4{ 0.5f, 0.5f, 0.5f, 1.f });
     if (ImGui::TreeNode(node, stream.str().c_str())) {
         if (ImGui::TreeNode(node + 1, "Attributes")) {
             if (ImGui::Button("Delete")) {
@@ -213,7 +215,6 @@ void generateTree(CCNode* node, unsigned int i = 0) {
             if (node->getZOrder() != zOrder)
                 node->setZOrder(zOrder);
             
-            auto visible = node->isVisible();
             ImGui::Checkbox("Visible", &visible);
             if (visible != node->isVisible())
                 node->setVisible(visible);
@@ -251,6 +252,7 @@ void generateTree(CCNode* node, unsigned int i = 0) {
         }
         ImGui::TreePop();
     }
+    ImGui::PopStyleColor();
 }
 
 bool g_showWindow = true;
