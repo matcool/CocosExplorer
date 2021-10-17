@@ -33,7 +33,7 @@ ImVec2 operator+(const ImVec2& a, const ImVec2& b) { return {a.x + b.x, a.y + b.
 ImVec2 operator-(const ImVec2& a, const ImVec2& b) { return {a.x - b.x, a.y - b.y}; }
 
 ImVec2 toVec2(const CCPoint& a) {
-    const auto size = ImGui::GetMainViewport()->Size * 0.5f; // ???
+    const auto size = ImGui::GetMainViewport()->Size;
     const auto winSize = CCDirector::sharedDirector()->getWinSize();
     return {
         a.x / winSize.width * size.x,
@@ -46,7 +46,7 @@ ImVec2 toVec2(const CCSize& a) {
     const auto winSize = CCDirector::sharedDirector()->getWinSize();
     return {
         a.width / winSize.width * size.x,
-        a.height / winSize.height * size.y
+        -a.height / winSize.height * size.y
     };
 }
 
@@ -62,26 +62,34 @@ void generateTree(CCNode* node, unsigned int i = 0) {
     const auto childrenCount = node->getChildrenCount();
     if (childrenCount)
         stream << " {" << childrenCount << "}";
+
     auto visible = node->isVisible();
     ImGui::PushStyleColor(ImGuiCol_Text, visible ? ImVec4{ 1.f, 1.f, 1.f, 1.f } : ImVec4{ 0.5f, 0.5f, 0.5f, 1.f });
-    if (ImGui::TreeNode(node, stream.str().c_str())) {
-        if (ImGui::TreeNode(node + 1, "Attributes")) {
+
+    bool main = ImGui::TreeNode(node, stream.str().c_str());
+    bool hovered = ImGui::IsItemHovered();
+    bool attributes = main && ImGui::TreeNode(node + 1, "Attributes");
+    hovered |= main && ImGui::IsItemHovered();
+    if (attributes || hovered) {
+        auto& foreground = *ImGui::GetForegroundDrawList();
+        auto parent = node->getParent();
+        auto anchorPoint = node->getAnchorPoint();
+        auto boundingBox = node->boundingBox();
+        auto bbMin = CCPoint(boundingBox.getMinX(), boundingBox.getMinY());
+        auto bbMax = CCPoint(boundingBox.getMaxX(), boundingBox.getMaxY());
+        auto min = toVec2(parent ? parent->convertToWorldSpace(bbMin) : bbMin);
+        auto max = toVec2(parent ? parent->convertToWorldSpace(bbMax) : bbMax);
+        foreground.AddRectFilled(min, max, hovered ? 0x709999FF : 0x70FFFFFF);
+    }
+
+    if (main) {
+        if (attributes) {
             if (ImGui::Button("Delete")) {
                 node->removeFromParentAndCleanup(true);
                 ImGui::TreePop();
                 ImGui::TreePop();
                 return;
             }
-            // it just doesnt work
-            #if 0
-            {
-                auto& foreground = *ImGui::GetForegroundDrawList();
-                auto pos = toVec2(node->convertToWorldSpace(node->getPosition()));
-                auto size = toVec2(node->getScaledContentSize());
-                // just assume its anchor point is 0.5 0.5 cuz im lazy
-                foreground.AddRectFilled(pos - size / 2.f, pos + size / 2.f, 0x50FFFFFF);
-            }
-            #endif
             ImGui::SameLine();
             if (ImGui::Button("Add Child")) {
                 ImGui::OpenPopup("Add Child");
