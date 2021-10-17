@@ -56,7 +56,9 @@ void generateTree(CCNode* node, unsigned int i = 0) {
     std::stringstream stream;
     stream << "[" << i << "] " << getNodeName(node);
     if (node->getTag() != -1)
-        stream << " (" << node->getTag() << ")";
+        stream << " (" << node->getObjType() << " | " << node->getTag() << ")";
+    else
+        stream << " (" << node->getObjType() << ")";
     const auto childrenCount = node->getChildrenCount();
     if (childrenCount)
         stream << " {" << childrenCount << "}";
