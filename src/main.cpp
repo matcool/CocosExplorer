@@ -271,7 +271,7 @@ void draw() {
     }
 }
 
-#define _CONSOLE
+// #define _CONSOLE
 
 DWORD WINAPI my_thread(void* hModule) {
 #ifdef _CONSOLE
