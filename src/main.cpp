@@ -77,6 +77,23 @@ void generateTree(CCNode* node, unsigned int i = 0) {
         auto boundingBox = node->boundingBox();
         auto bbMin = CCPoint(boundingBox.getMinX(), boundingBox.getMinY());
         auto bbMax = CCPoint(boundingBox.getMaxX(), boundingBox.getMaxY());
+
+        auto cameraParent = node;
+        while (cameraParent) {
+            auto camera = cameraParent->getCamera();
+
+            auto offsetX = 0.f;
+            auto offsetY = 0.f;
+            auto offsetZ = 0.f;
+            camera->getEyeXYZ(&offsetX, &offsetY, &offsetZ);
+            auto offset = CCPoint(offsetX, offsetY);
+            // they don't have -= for some reason
+            bbMin = bbMin - offset;
+            bbMax = bbMax - offset;
+
+            cameraParent = cameraParent->getParent();
+        }
+
         auto min = toVec2(parent ? parent->convertToWorldSpace(bbMin) : bbMin);
         auto max = toVec2(parent ? parent->convertToWorldSpace(bbMax) : bbMax);
         foreground.AddRectFilled(min, max, hovered ? 0x709999FF : 0x70FFFFFF);
