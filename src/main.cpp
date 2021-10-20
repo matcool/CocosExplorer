@@ -33,7 +33,7 @@ ImVec2 operator+(const ImVec2& a, const ImVec2& b) { return {a.x + b.x, a.y + b.
 ImVec2 operator-(const ImVec2& a, const ImVec2& b) { return {a.x - b.x, a.y - b.y}; }
 
 ImVec2 toVec2(const CCPoint& a) {
-    const auto size = ImGui::GetMainViewport()->Size * 0.5f; // ???
+    const auto size = ImGui::GetMainViewport()->Size;
     const auto winSize = CCDirector::sharedDirector()->getWinSize();
     return {
         a.x / winSize.width * size.x,
@@ -46,7 +46,7 @@ ImVec2 toVec2(const CCSize& a) {
     const auto winSize = CCDirector::sharedDirector()->getWinSize();
     return {
         a.width / winSize.width * size.x,
-        a.height / winSize.height * size.y
+        -a.height / winSize.height * size.y
     };
 }
 
@@ -56,28 +56,57 @@ void generateTree(CCNode* node, unsigned int i = 0) {
     std::stringstream stream;
     stream << "[" << i << "] " << getNodeName(node);
     if (node->getTag() != -1)
-        stream << " (" << node->getTag() << ")";
+        stream << " (" << node->getObjType() << " | " << node->getTag() << ")";
+    else
+        stream << " (" << node->getObjType() << ")";
     const auto childrenCount = node->getChildrenCount();
     if (childrenCount)
         stream << " {" << childrenCount << "}";
-    if (ImGui::TreeNode(node, stream.str().c_str())) {
-        if (ImGui::TreeNode(node + 1, "Attributes")) {
+
+    auto visible = node->isVisible();
+    ImGui::PushStyleColor(ImGuiCol_Text, visible ? ImVec4{ 1.f, 1.f, 1.f, 1.f } : ImVec4{ 0.5f, 0.5f, 0.5f, 1.f });
+
+    bool main = ImGui::TreeNode(node, stream.str().c_str());
+    bool hovered = ImGui::IsItemHovered();
+    bool attributes = main && ImGui::TreeNode(node + 1, "Attributes");
+    hovered |= main && ImGui::IsItemHovered();
+    if (attributes || hovered) {
+        auto& foreground = *ImGui::GetForegroundDrawList();
+        auto parent = node->getParent();
+        auto anchorPoint = node->getAnchorPoint();
+        auto boundingBox = node->boundingBox();
+        auto bbMin = CCPoint(boundingBox.getMinX(), boundingBox.getMinY());
+        auto bbMax = CCPoint(boundingBox.getMaxX(), boundingBox.getMaxY());
+
+        auto cameraParent = node;
+        while (cameraParent) {
+            auto camera = cameraParent->getCamera();
+
+            auto offsetX = 0.f;
+            auto offsetY = 0.f;
+            auto offsetZ = 0.f;
+            camera->getEyeXYZ(&offsetX, &offsetY, &offsetZ);
+            auto offset = CCPoint(offsetX, offsetY);
+            // they don't have -= for some reason
+            bbMin = bbMin - offset;
+            bbMax = bbMax - offset;
+
+            cameraParent = cameraParent->getParent();
+        }
+
+        auto min = toVec2(parent ? parent->convertToWorldSpace(bbMin) : bbMin);
+        auto max = toVec2(parent ? parent->convertToWorldSpace(bbMax) : bbMax);
+        foreground.AddRectFilled(min, max, hovered ? 0x709999FF : 0x70FFFFFF);
+    }
+
+    if (main) {
+        if (attributes) {
             if (ImGui::Button("Delete")) {
                 node->removeFromParentAndCleanup(true);
                 ImGui::TreePop();
                 ImGui::TreePop();
                 return;
             }
-            // it just doesnt work
-            #if 0
-            {
-                auto& foreground = *ImGui::GetForegroundDrawList();
-                auto pos = toVec2(node->convertToWorldSpace(node->getPosition()));
-                auto size = toVec2(node->getScaledContentSize());
-                // just assume its anchor point is 0.5 0.5 cuz im lazy
-                foreground.AddRectFilled(pos - size / 2.f, pos + size / 2.f, 0x50FFFFFF);
-            }
-            #endif
             ImGui::SameLine();
             if (ImGui::Button("Add Child")) {
                 ImGui::OpenPopup("Add Child");
@@ -211,7 +240,6 @@ void generateTree(CCNode* node, unsigned int i = 0) {
             if (node->getZOrder() != zOrder)
                 node->setZOrder(zOrder);
             
-            auto visible = node->isVisible();
             ImGui::Checkbox("Visible", &visible);
             if (visible != node->isVisible())
                 node->setVisible(visible);
@@ -249,6 +277,7 @@ void generateTree(CCNode* node, unsigned int i = 0) {
         }
         ImGui::TreePop();
     }
+    ImGui::PopStyleColor();
 }
 
 bool g_showWindow = true;
@@ -267,7 +296,7 @@ void draw() {
     }
 }
 
-#define _CONSOLE
+// #define _CONSOLE
 
 DWORD WINAPI my_thread(void* hModule) {
 #ifdef _CONSOLE
