@@ -56,9 +56,7 @@ void generateTree(CCNode* node, unsigned int i = 0) {
     std::stringstream stream;
     stream << "[" << i << "] " << getNodeName(node);
     if (node->getTag() != -1)
-        stream << " (" << node->getObjType() << " | " << node->getTag() << ")";
-    else
-        stream << " (" << node->getObjType() << ")";
+        stream << " (" << node->getTag() << ")";
     const auto childrenCount = node->getChildrenCount();
     if (childrenCount)
         stream << " {" << childrenCount << "}";
@@ -70,7 +68,7 @@ void generateTree(CCNode* node, unsigned int i = 0) {
     bool hovered = ImGui::IsItemHovered();
     bool attributes = main && ImGui::TreeNode(node + 1, "Attributes");
     hovered |= main && ImGui::IsItemHovered();
-    if (attributes || hovered) {
+    if ((attributes || hovered) && ImGui::GetIO().KeyShift) {
         auto& foreground = *ImGui::GetForegroundDrawList();
         auto parent = node->getParent();
         auto anchorPoint = node->getAnchorPoint();
@@ -96,7 +94,7 @@ void generateTree(CCNode* node, unsigned int i = 0) {
 
         auto min = toVec2(parent ? parent->convertToWorldSpace(bbMin) : bbMin);
         auto max = toVec2(parent ? parent->convertToWorldSpace(bbMax) : bbMax);
-        foreground.AddRectFilled(min, max, hovered ? 0x709999FF : 0x70FFFFFF);
+        foreground.AddRectFilled(min, max, hovered ? 0x509999FF : 0x50FFFFFF);
     }
 
     if (main) {
