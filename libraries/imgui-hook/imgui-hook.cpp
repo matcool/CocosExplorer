@@ -62,7 +62,7 @@ void __fastcall CCEGLView_pollEvents_H(CCEGLView* self) {
         TranslateMessage(&msg);
 
         if (io.WantCaptureMouse) {
-            switch(msg.message) {
+            switch (msg.message) {
                 case WM_LBUTTONDBLCLK:
                 case WM_LBUTTONDOWN:
                 case WM_LBUTTONUP:
@@ -101,7 +101,7 @@ void __fastcall CCEGLView_pollEvents_H(CCEGLView* self) {
         }
 
         if (io.WantCaptureKeyboard) {
-            switch(msg.message) {
+            switch (msg.message) {
                 case WM_HOTKEY:
                 case WM_KEYDOWN:
                 case WM_KEYUP:
@@ -124,6 +124,22 @@ void __fastcall CCEGLView_pollEvents_H(CCEGLView* self) {
     CCEGLView_pollEvents(self);
 }
 
+void (__thiscall* CCEGLView_toggleFullScreen)(cocos2d::CCEGLView*, bool);
+void __fastcall CCEGLView_toggleFullScreen_H(cocos2d::CCEGLView* self, void*, bool toggle) {
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplWin32_Shutdown();
+    ImGui::DestroyContext();
+
+    CCEGLView_toggleFullScreen(self, toggle);
+
+    g_inited = true;
+    ImGui::CreateContext();
+    ImGui::GetIO();
+    auto hwnd = WindowFromDC(*reinterpret_cast<HDC*>(reinterpret_cast<uintptr_t>(self->getWindow()) + 0x244));
+    ImGui_ImplWin32_Init(hwnd);
+    ImGui_ImplOpenGL3_Init();
+}
+
 void ImGuiHook::setupHooks(std::function<void(void*, void*, void**)> hookFunc) {
     auto cocosBase = GetModuleHandleA("libcocos2d.dll");
     hookFunc(
@@ -135,5 +151,10 @@ void ImGuiHook::setupHooks(std::function<void(void*, void*, void**)> hookFunc) {
         GetProcAddress(cocosBase, "?pollEvents@CCEGLView@cocos2d@@QAEXXZ"),
         CCEGLView_pollEvents_H,
         reinterpret_cast<void**>(&CCEGLView_pollEvents)
+    );
+    hookFunc(
+        GetProcAddress(cocosBase, "?toggleFullScreen@CCEGLView@cocos2d@@QAEX_N@Z"),
+        CCEGLView_toggleFullScreen_H,
+        reinterpret_cast<void**>(&CCEGLView_toggleFullScreen)
     );
 }
