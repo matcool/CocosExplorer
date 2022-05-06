@@ -140,6 +140,12 @@ void __fastcall CCEGLView_toggleFullScreen_H(cocos2d::CCEGLView* self, void*, bo
     ImGui_ImplOpenGL3_Init();
 }
 
+void (__thiscall* AppDelegate_applicationWillEnterForeground)(void*);
+void __fastcall AppDelegate_applicationWillEnterForeground_H(void* self) {
+    AppDelegate_applicationWillEnterForeground(self);
+    ImGui::GetIO().ClearInputKeys();
+}
+
 void ImGuiHook::setupHooks(std::function<void(void*, void*, void**)> hookFunc) {
     auto cocosBase = GetModuleHandleA("libcocos2d.dll");
     hookFunc(
@@ -156,5 +162,10 @@ void ImGuiHook::setupHooks(std::function<void(void*, void*, void**)> hookFunc) {
         GetProcAddress(cocosBase, "?toggleFullScreen@CCEGLView@cocos2d@@QAEX_N@Z"),
         CCEGLView_toggleFullScreen_H,
         reinterpret_cast<void**>(&CCEGLView_toggleFullScreen)
+    );
+    hookFunc(
+        reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(GetModuleHandleA(0)) + 0x3d130),
+        reinterpret_cast<void*>(&AppDelegate_applicationWillEnterForeground_H),
+        reinterpret_cast<void**>(&AppDelegate_applicationWillEnterForeground)
     );
 }
