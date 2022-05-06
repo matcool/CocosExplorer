@@ -278,7 +278,7 @@ void generateTree(CCNode* node, unsigned int i = 0) {
     ImGui::PopStyleColor();
 }
 
-bool g_showWindow = true;
+bool g_showWindow = false;
 
 void draw() {
     if (g_showWindow) {
@@ -286,10 +286,19 @@ void draw() {
         style.ColorButtonPosition = ImGuiDir_Left;
 
         auto director = CCDirector::sharedDirector();
-        if (ImGui::Begin("cocos2d explorer"), nullptr, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_AlwaysHorizontalScrollbar) {
+        if (ImGui::Begin("cocos2d explorer", nullptr, ImGuiWindowFlags_HorizontalScrollbar)) {
             auto curScene = director->getRunningScene();
             generateTree(curScene);
         }
+        ImGui::End();
+    }
+
+    if (ImGui::GetTime() < 5.0) {
+        ImGui::SetNextWindowPos({10, 10});
+        ImGui::Begin("cocosexplorermsg", nullptr,
+            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMouseInputs | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings);
+        ImGui::Text("Cocos explorer loaded, press K to toggle");
         ImGui::End();
     }
 }
