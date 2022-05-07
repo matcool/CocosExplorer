@@ -303,6 +303,20 @@ void draw() {
     }
 }
 
+void init() {
+    auto& style = ImGui::GetStyle();
+	style.WindowTitleAlign = ImVec2(0.5f, 0.5f);
+	style.WindowBorderSize = 0;
+
+	auto colors = style.Colors;
+	colors[ImGuiCol_FrameBg] = ImVec4(0.31f, 0.31f, 0.31f, 0.54f);
+	colors[ImGuiCol_FrameBgHovered] = ImVec4(0.59f, 0.59f, 0.59f, 0.40f);
+	colors[ImGuiCol_FrameBgActive] = ImVec4(0.61f, 0.61f, 0.61f, 0.67f);
+	colors[ImGuiCol_TitleBg] = colors[ImGuiCol_TitleBgActive] = ImVec4(0.2f, 0.2f, 0.2f, 1.00f);
+	colors[ImGuiCol_CheckMark] = ImVec4(0.89f, 0.89f, 0.89f, 1.00f);
+	colors[ImGuiCol_TextSelectedBg] = ImVec4(0.71f, 0.71f, 0.71f, 0.35f);
+}
+
 // #define _CONSOLE
 
 DWORD WINAPI my_thread(void* hModule) {
@@ -318,6 +332,7 @@ DWORD WINAPI my_thread(void* hModule) {
     ImGuiHook::setToggleCallback([]() {
         g_showWindow = !g_showWindow;
     });
+    ImGuiHook::setInitFunction(init);
     auto cocosBase = GetModuleHandleA("libcocos2d.dll");
     MH_Initialize();
     ImGuiHook::setupHooks([](void* target, void* hook, void** trampoline) {

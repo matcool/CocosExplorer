@@ -9,4 +9,5 @@ namespace ImGuiHook {
 
     void setRenderFunction(std::function<void()> func);
     void setToggleCallback(std::function<void()> func);
+    void setInitFunction(std::function<void()> func);
 }
