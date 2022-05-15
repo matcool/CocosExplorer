@@ -138,12 +138,7 @@ void __fastcall CCEGLView_toggleFullScreen_H(cocos2d::CCEGLView* self, void*, bo
 
     CCEGLView_toggleFullScreen(self, toggle);
 
-    g_inited = true;
-    ImGui::CreateContext();
-    ImGui::GetIO();
-    auto hwnd = WindowFromDC(*reinterpret_cast<HDC*>(reinterpret_cast<uintptr_t>(self->getWindow()) + 0x244));
-    ImGui_ImplWin32_Init(hwnd);
-    ImGui_ImplOpenGL3_Init();
+    g_inited = false;
 }
 
 void (__thiscall* AppDelegate_applicationWillEnterForeground)(void*);
