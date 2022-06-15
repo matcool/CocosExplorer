@@ -229,7 +229,7 @@ void draw() {
 		ImGui::Begin("cocosexplorermsg", nullptr,
 			ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
 			ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMouseInputs | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings);
-		ImGui::Text("Cocos explorer loaded, press K to toggle");
+		ImGui::Text("Cocos explorer loaded, press F1 to toggle");
 		ImGui::End();
 	}
 	if (g_font) ImGui::PopFont();
@@ -273,6 +273,7 @@ DWORD WINAPI my_thread(void* hModule) {
 	ImGuiHook::setupHooks([](void* target, void* hook, void** trampoline) {
 		MH_CreateHook(target, hook, trampoline);
 	});
+	ImGuiHook::setKeybind(VK_F1);
 	MH_EnableHook(MH_ALL_HOOKS);
 
 #ifdef _CONSOLE

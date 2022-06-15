@@ -10,6 +10,8 @@ std::function<void()> g_drawFunc = _stub;
 std::function<void()> g_toggleCallback = _stub;
 std::function<void()> g_initFunc = _stub;
 
+size_t g_keybind = VK_F1;
+
 void ImGuiHook::setRenderFunction(std::function<void()> func) {
     g_drawFunc = func;
 }
@@ -20,6 +22,10 @@ void ImGuiHook::setToggleCallback(std::function<void()> func) {
 
 void ImGuiHook::setInitFunction(std::function<void()> func) {
     g_initFunc = func;
+}
+
+void ImGuiHook::setKeybind(size_t key) {
+    g_keybind = key;
 }
 
 bool g_inited = false;
@@ -117,7 +123,7 @@ void __fastcall CCEGLView_pollEvents_H(CCEGLView* self) {
                 case WM_SYSKEYUP:
                     blockInput = true;
             }
-        } else if (msg.message == WM_KEYDOWN && msg.wParam == 'K') {
+        } else if (msg.message == WM_KEYDOWN && msg.wParam == g_keybind) {
             g_toggleCallback();
         }
 
@@ -132,13 +138,14 @@ void __fastcall CCEGLView_pollEvents_H(CCEGLView* self) {
 
 void (__thiscall* CCEGLView_toggleFullScreen)(cocos2d::CCEGLView*, bool);
 void __fastcall CCEGLView_toggleFullScreen_H(cocos2d::CCEGLView* self, void*, bool toggle) {
+    
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
 
-    CCEGLView_toggleFullScreen(self, toggle);
-
     g_inited = false;
+    
+    CCEGLView_toggleFullScreen(self, toggle);
 }
 
 void (__thiscall* AppDelegate_applicationWillEnterForeground)(void*);
