@@ -3,16 +3,36 @@
 #include <cocos2d.h>
 #include <imgui.h>
 #include <MinHook.h>
-#include <fstream>
 #include <sstream>
 #include <imgui-hook.hpp>
 #include <string_view>
 #include <imgui/misc/cpp/imgui_stdlib.h>
+#include <filesystem>
 
 using namespace cocos2d;
 
 const char* get_node_name(CCNode* node) {
 	return typeid(*node).name() + 6;
+}
+
+std::string get_module_name(HMODULE mod) {
+	char buffer[MAX_PATH];
+	if (!mod || !GetModuleFileNameA(mod, buffer, MAX_PATH))
+		return "Unknown";
+	return std::filesystem::path(buffer).filename().string();
+}
+
+std::string format_addr(void* addr) {
+	HMODULE mod;
+
+	if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+		GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+		reinterpret_cast<char*>(addr), &mod))
+		mod = NULL;
+
+	std::stringstream stream;
+	stream << get_module_name(mod) << "." << reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(addr) - reinterpret_cast<uintptr_t>(mod));
+	return stream.str();
 }
 
 #define public_cast(value, member) [](auto* v) { \
@@ -55,6 +75,9 @@ ImVec2 operator*(const ImVec2& vec, const float m) { return {vec.x * m, vec.y * 
 ImVec2 operator/(const ImVec2& vec, const float m) { return {vec.x / m, vec.y / m}; }
 ImVec2 operator+(const ImVec2& a, const ImVec2& b) { return {a.x + b.x, a.y + b.y}; }
 ImVec2 operator-(const ImVec2& a, const ImVec2& b) { return {a.x - b.x, a.y - b.y}; }
+
+bool operator==(const CCPoint& a, const CCPoint& b) { return a.x == b.x && a.y == b.y; }
+bool operator==(const CCRect& a, const CCRect& b) { return a.origin == b.origin && a.size == b.size; }
 
 static CCNode* selected_node = nullptr;
 static bool reached_selected_node = false;
@@ -103,7 +126,7 @@ void render_node_properties(CCNode* node) {
 	}
 	ImGui::Text("Addr: 0x%p", node);
 	ImGui::SameLine();
-	if (ImGui::Button("Copy")) {
+	if (ImGui::Button("Copy##copyaddr")) {
 		std::stringstream stream;
 		stream << std::uppercase << std::hex << reinterpret_cast<uintptr_t>(node);
 		set_clipboard_text(stream.str());
@@ -111,10 +134,14 @@ void render_node_properties(CCNode* node) {
 	if (node->getUserData())
 		ImGui::Text("User data: 0x%p", node->getUserData());
 
-	const auto menu_item_node = dynamic_cast<CCMenuItem*>(node);
-	if (menu_item_node) {
+	if (auto menu_item_node = dynamic_cast<CCMenuItem*>(node); menu_item_node) {
 		const auto selector = public_cast(menu_item_node, m_pfnSelector);
-		ImGui::Text("CCMenuItem selector: %p", union_cast<void*>(selector));
+		const auto addr = format_addr(union_cast<void*>(selector));
+		ImGui::Text("CCMenuItem selector: %s", addr.c_str());
+		ImGui::SameLine();
+		if (ImGui::Button("Copy##copyselector")) {
+			set_clipboard_text(addr);
+		}
 	}
 
 #define GET_SET_FLOAT2(name, label) { \
@@ -163,8 +190,7 @@ void render_node_properties(CCNode* node) {
 	GET_SET_INT(ZOrder, "Z Order");
 	GET_SET_CHECKBOX(Visible, "Visible");
 
-	const auto rgba_node = dynamic_cast<CCNodeRGBA*>(node);
-	if (rgba_node) {
+	if (auto rgba_node = dynamic_cast<CCNodeRGBA*>(node); rgba_node) {
 		auto color = rgba_node->getColor();
 		float colorValues[4] = {
 			color.r / 255.f,
@@ -181,11 +207,36 @@ void render_node_properties(CCNode* node) {
 			rgba_node->setOpacity(static_cast<GLubyte>(colorValues[3] * 255.f));
 		}
 	}
-	const auto label_node = dynamic_cast<CCLabelProtocol*>(node);
-	if (label_node) {
+	
+	if (auto label_node = dynamic_cast<CCLabelProtocol*>(node); label_node) {
 		std::string str = label_node->getString();
 		if (ImGui::InputTextMultiline("Text", &str, {0, 50}))
 			label_node->setString(str.c_str());
+	}
+
+	if (auto sprite_node = dynamic_cast<CCSprite*>(node); sprite_node) {
+		auto* texture = sprite_node->getTexture();
+
+		auto* texture_cache = CCTextureCache::sharedTextureCache();
+		auto* cached_textures = public_cast(texture_cache, m_pTextures);
+		CCDictElement* el;
+		CCDICT_FOREACH(cached_textures, el) {
+			if (el->getObject() == texture) {
+				ImGui::TextWrapped("Texture name: %s", el->getStrKey());
+				break;
+			}
+		}
+
+		auto* frame_cache = CCSpriteFrameCache::sharedSpriteFrameCache();
+		auto* cached_frames = public_cast(frame_cache, m_pSpriteFrames);
+		const auto rect = sprite_node->getTextureRect();
+		CCDICT_FOREACH(cached_frames, el) {
+			auto* frame = static_cast<CCSpriteFrame*>(el->getObject());
+			if (frame->getTexture() == texture && frame->getRect() == rect) {
+				ImGui::Text("Frame name: %s", el->getStrKey());
+				break;
+			}
+		}
 	}
 }
 
@@ -196,7 +247,6 @@ void draw() {
 	if (g_font) ImGui::PushFont(g_font);
 	if (show_window) {
 		if (ImGui::Begin("cocos2d explorer", nullptr, ImGuiWindowFlags_HorizontalScrollbar)) {
-
 			const auto avail = ImGui::GetContentRegionAvail();
 
 			ImGui::BeginChild("explorer.tree", ImVec2(avail.x * 0.5f, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
@@ -252,17 +302,8 @@ void init() {
 	colors[ImGuiCol_TextSelectedBg] = ImVec4(0.71f, 0.71f, 0.71f, 0.35f);
 }
 
-// #define _CONSOLE
 
 DWORD WINAPI my_thread(void* hModule) {
-#ifdef _CONSOLE
-	AllocConsole();
-	std::ofstream conout("CONOUT$", std::ios::out);
-	std::ifstream conin("CONIN$", std::ios::in);
-	std::cout.rdbuf(conout.rdbuf());
-	std::cin.rdbuf(conin.rdbuf());
-#endif
-
 	ImGuiHook::setRenderFunction(draw);
 	ImGuiHook::setToggleCallback([]() {
 		show_window = !show_window;
@@ -275,23 +316,6 @@ DWORD WINAPI my_thread(void* hModule) {
 	});
 	ImGuiHook::setKeybind(VK_F1);
 	MH_EnableHook(MH_ALL_HOOKS);
-
-#ifdef _CONSOLE
-	std::getline(std::cin, std::string());
-
-	// crashes lol
-	// ImGui_ImplOpenGL3_Shutdown();
-	// ImGui_ImplWin32_Shutdown();
-	// ImGui::DestroyContext();
-	
-	MH_Uninitialize();
-
-	conout.close();
-	conin.close();
-	FreeConsole();
-	FreeLibraryAndExitThread(reinterpret_cast<HMODULE>(hModule), 0);
-#endif
-
 	return 0;
 }
 
