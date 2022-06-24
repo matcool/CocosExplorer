@@ -134,16 +134,6 @@ void render_node_properties(CCNode* node) {
 	if (node->getUserData())
 		ImGui::Text("User data: 0x%p", node->getUserData());
 
-	if (auto menu_item_node = dynamic_cast<CCMenuItem*>(node); menu_item_node) {
-		const auto selector = public_cast(menu_item_node, m_pfnSelector);
-		const auto addr = format_addr(union_cast<void*>(selector));
-		ImGui::Text("CCMenuItem selector: %s", addr.c_str());
-		ImGui::SameLine();
-		if (ImGui::Button("Copy##copyselector")) {
-			set_clipboard_text(addr);
-		}
-	}
-
 #define GET_SET_FLOAT2(name, label) { \
 	auto point = node->get##name(); \
 	if (ImGui::DragFloat2(label, reinterpret_cast<float*>(&point))) \
@@ -236,6 +226,16 @@ void render_node_properties(CCNode* node) {
 				ImGui::Text("Frame name: %s", el->getStrKey());
 				break;
 			}
+		}
+	}
+
+	if (auto menu_item_node = dynamic_cast<CCMenuItem*>(node); menu_item_node) {
+		const auto selector = public_cast(menu_item_node, m_pfnSelector);
+		const auto addr = format_addr(union_cast<void*>(selector));
+		ImGui::Text("CCMenuItem selector: %s", addr.c_str());
+		ImGui::SameLine();
+		if (ImGui::Button("Copy##copyselector")) {
+			set_clipboard_text(addr);
 		}
 	}
 }
