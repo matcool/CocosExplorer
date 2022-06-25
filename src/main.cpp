@@ -8,79 +8,21 @@
 #include <string_view>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 #include <filesystem>
+#include "utils.hpp"
 
 using namespace cocos2d;
 
 const char* get_node_name(CCNode* node) {
+	// works because msvc's typeid().name() returns undecorated name
+	// typeid(CCNode).name() == "class cocos2d::CCNode"
+	// the + 6 gets rid of the class prefix
+	// "class cocos2d::CCNode" + 6 == "cocos2d::CCNode"
 	return typeid(*node).name() + 6;
 }
 
-std::string get_module_name(HMODULE mod) {
-	char buffer[MAX_PATH];
-	if (!mod || !GetModuleFileNameA(mod, buffer, MAX_PATH))
-		return "Unknown";
-	return std::filesystem::path(buffer).filename().string();
-}
-
-std::string format_addr(void* addr) {
-	HMODULE mod;
-
-	if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-		GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-		reinterpret_cast<char*>(addr), &mod))
-		mod = NULL;
-
-	std::stringstream stream;
-	stream << get_module_name(mod) << "." << reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(addr) - reinterpret_cast<uintptr_t>(mod));
-	return stream.str();
-}
-
-#define public_cast(value, member) [](auto* v) { \
-	class FriendClass__; \
-	using T = std::remove_pointer<decltype(v)>::type; \
-	class FriendeeClass__: public T { \
-	protected: \
-		friend FriendClass__; \
-	}; \
-	class FriendClass__ { \
-	public: \
-		auto& get(FriendeeClass__* v) { return v->member; } \
-	} c; \
-	return c.get(reinterpret_cast<FriendeeClass__*>(v)); \
-}(value)
-
-template <typename T, typename U>
-T union_cast(U value) {
-	union {
-		T a;
-		U b;
-	} u;
-	u.b = value;
-	return u.a;
-}
-
-void set_clipboard_text(std::string_view text) {
-	if (!OpenClipboard(NULL)) return;
-	if (!EmptyClipboard()) return;
-	const auto len = text.size();
-	auto mem = GlobalAlloc(GMEM_MOVEABLE, len + 1);
-	memcpy(GlobalLock(mem), text.data(), len + 1);
-	GlobalUnlock(mem);
-	SetClipboardData(CF_TEXT, mem);
-	CloseClipboard();
-}
-
-bool operator!=(const CCSize& a, const CCSize& b) { return a.width != b.width || a.height != b.height; }
-ImVec2 operator*(const ImVec2& vec, const float m) { return {vec.x * m, vec.y * m}; }
-ImVec2 operator/(const ImVec2& vec, const float m) { return {vec.x / m, vec.y / m}; }
-ImVec2 operator+(const ImVec2& a, const ImVec2& b) { return {a.x + b.x, a.y + b.y}; }
-ImVec2 operator-(const ImVec2& a, const ImVec2& b) { return {a.x - b.x, a.y - b.y}; }
-
-bool operator==(const CCPoint& a, const CCPoint& b) { return a.x == b.x && a.y == b.y; }
-bool operator==(const CCRect& a, const CCRect& b) { return a.origin == b.origin && a.size == b.size; }
-
 static CCNode* selected_node = nullptr;
 static bool reached_selected_node = false;
+static CCNode* hovered_node = nullptr;
 
 void render_node_tree(CCNode* node, unsigned int index = 0) {
 	std::stringstream stream;
@@ -102,9 +44,16 @@ void render_node_tree(CCNode* node, unsigned int index = 0) {
 	ImGui::PushStyleColor(ImGuiCol_Text, node->isVisible() ? ImVec4 { 1.f, 1.f, 1.f, 1.f } : ImVec4 { 0.8f, 0.8f, 0.8f, 1.f });
 	const bool is_open = ImGui::TreeNodeEx(node, flags, stream.str().c_str());
 	if (ImGui::IsItemClicked()) {
-		selected_node = node;
-		reached_selected_node = true;
+		if (node == selected_node && ImGui::GetIO().KeyAlt) {
+			selected_node = nullptr;
+			reached_selected_node = false;
+		} else {
+			selected_node = node;
+			reached_selected_node = true;
+		}
 	}
+	if (ImGui::IsItemHovered())
+		hovered_node = node;
 	if (is_open) {
 		auto children = node->getChildren();
 		for (unsigned int i = 0; i < children_count; ++i) {
@@ -240,13 +189,45 @@ void render_node_properties(CCNode* node) {
 	}
 }
 
+void render_node_highlight(CCNode* node, bool selected) {
+	auto& foreground = *ImGui::GetForegroundDrawList();
+	auto parent = node->getParent();
+	auto bounding_box = node->boundingBox();
+	CCPoint bb_min(bounding_box.getMinX(), bounding_box.getMinY());
+	CCPoint bb_max(bounding_box.getMaxX(), bounding_box.getMaxY());
+
+	auto camera_parent = node;
+	while (camera_parent) {
+		auto camera = camera_parent->getCamera();
+
+		float off_x, off_y, off_z;
+		camera->getEyeXYZ(&off_x, &off_y, &off_z);
+		const CCPoint offset(off_x, off_y);
+		bb_min -= offset;
+		bb_max -= offset;
+
+		camera_parent = camera_parent->getParent();
+	}
+
+	auto min = cocos_to_vec2(parent ? parent->convertToWorldSpace(bb_min) : bb_min);
+	auto max = cocos_to_vec2(parent ? parent->convertToWorldSpace(bb_max) : bb_max);
+	foreground.AddRectFilled(min, max, selected ? IM_COL32(200, 200, 255, 60) : IM_COL32(255, 255, 255, 70));
+}
+
 bool show_window = false;
 static ImFont* g_font = nullptr;
 
 void draw() {
 	if (g_font) ImGui::PushFont(g_font);
 	if (show_window) {
-		if (ImGui::Begin("cocos2d explorer", nullptr, ImGuiWindowFlags_HorizontalScrollbar)) {
+		static bool highlight = false;
+		hovered_node = nullptr;
+		if (ImGui::Begin("cocos2d explorer", nullptr, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_MenuBar)) {
+			if (ImGui::BeginMenuBar()) {
+				ImGui::MenuItem("Highlight", nullptr, &highlight);
+				ImGui::EndMenuBar();
+			}
+
 			const auto avail = ImGui::GetContentRegionAvail();
 
 			ImGui::BeginChild("explorer.tree", ImVec2(avail.x * 0.5f, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
@@ -272,6 +253,13 @@ void draw() {
 			ImGui::EndChild();
 		}
 		ImGui::End();
+
+		if (highlight && (selected_node || hovered_node)) {
+			if (selected_node)
+				render_node_highlight(selected_node, true);
+			if (hovered_node)
+				render_node_highlight(hovered_node, false);
+		}
 	}
 
 	if (ImGui::GetTime() < 5.0) {
@@ -309,7 +297,6 @@ DWORD WINAPI my_thread(void* hModule) {
 		show_window = !show_window;
 	});
 	ImGuiHook::setInitFunction(init);
-	auto cocosBase = GetModuleHandleA("libcocos2d.dll");
 	MH_Initialize();
 	ImGuiHook::setupHooks([](void* target, void* hook, void** trampoline) {
 		MH_CreateHook(target, hook, trampoline);
