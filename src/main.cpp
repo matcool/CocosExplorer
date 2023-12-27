@@ -1,30 +1,91 @@
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-#include <cocos2d.h>
-#include <imgui.h>
-#include <MinHook.h>
-#include <sstream>
-#include <imgui-hook.hpp>
-#include <string_view>
-#include <imgui/misc/cpp/imgui_stdlib.h>
-#include <filesystem>
+#include <Geode/Geode.hpp>
+
+using namespace geode::prelude;
+
+#include <imgui-cocos.hpp>
+#include <misc/cpp/imgui_stdlib.h>
+
 #include "utils.hpp"
 
-using namespace cocos2d;
+void draw();
 
-const char* get_node_name(CCNode* node) {
-	// works because msvc's typeid().name() returns undecorated name
-	// typeid(CCNode).name() == "class cocos2d::CCNode"
-	// the + 6 gets rid of the class prefix
-	// "class cocos2d::CCNode" + 6 == "cocos2d::CCNode"
-	return typeid(*node).name() + 6;
+$on_mod(Loaded) {
+    ImGuiCocos::get().setup([] {
+        auto& style = ImGui::GetStyle();
+		style.WindowTitleAlign = ImVec2(0.5f, 0.5f);
+		style.WindowBorderSize = 0;
+		style.ColorButtonPosition = ImGuiDir_Left;
+
+		if (ghc::filesystem::exists("C:\\Windows\\Fonts\\consola.ttf")) {
+			auto* font = ImGui::GetIO().Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\consola.ttf", 14.f);
+			if (font)
+				ImGui::GetIO().FontDefault = font;
+		}
+
+		auto colors = style.Colors;
+		colors[ImGuiCol_FrameBg] = ImVec4(0.31f, 0.31f, 0.31f, 0.54f);
+		colors[ImGuiCol_FrameBgHovered] = ImVec4(0.59f, 0.59f, 0.59f, 0.40f);
+		colors[ImGuiCol_FrameBgActive] = ImVec4(0.61f, 0.61f, 0.61f, 0.67f);
+		colors[ImGuiCol_TitleBg] = colors[ImGuiCol_TitleBgActive] = ImVec4(0.2f, 0.2f, 0.2f, 1.00f);
+		colors[ImGuiCol_CheckMark] = ImVec4(0.89f, 0.89f, 0.89f, 1.00f);
+		colors[ImGuiCol_TextSelectedBg] = ImVec4(0.71f, 0.71f, 0.71f, 0.35f);
+    }).draw([] {
+        draw();
+    });
 }
 
-static CCNode* selected_node = nullptr;
-static bool reached_selected_node = false;
-static CCNode* hovered_node = nullptr;
+CCNode* selected_node = nullptr;
+bool reached_selected_node = false;
+CCNode* hovered_node = nullptr;
 
-void render_node_tree(CCNode* node, unsigned int index = 0) {
+void render_node_tree(CCNode*, unsigned int index = 0);
+void render_node_properties(CCNode* node);
+void render_node_highlight(CCNode* node, bool selected);
+
+void draw() {
+	static bool highlight = false;
+	hovered_node = nullptr;
+	if (ImGui::Begin("cocos2d explorer", nullptr, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_MenuBar)) {
+		if (ImGui::BeginMenuBar()) {
+			ImGui::MenuItem("Highlight", nullptr, &highlight);
+			ImGui::EndMenuBar();
+		}
+
+		const auto avail = ImGui::GetContentRegionAvail();
+
+		ImGui::BeginChild("explorer.tree", ImVec2(avail.x * 0.5f, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
+
+		auto node = CCDirector::sharedDirector()->getRunningScene();
+		reached_selected_node = false;
+		render_node_tree(node);
+		
+		ImGui::EndChild();
+
+		if (!reached_selected_node)
+			selected_node = nullptr;
+
+		ImGui::SameLine();
+
+		ImGui::BeginChild("explorer.options");
+
+		if (selected_node)
+			render_node_properties(selected_node);
+		else
+			ImGui::Text("Select a node to edit its properties :-)");
+
+		ImGui::EndChild();
+	}
+	ImGui::End();
+
+	if (highlight && (selected_node || hovered_node)) {
+		if (selected_node)
+			render_node_highlight(selected_node, true);
+		if (hovered_node)
+			render_node_highlight(hovered_node, false);
+	}
+}
+
+void render_node_tree(CCNode* node, unsigned int index) {
 	std::stringstream stream;
 	stream << "[" << index << "] " << get_node_name(node);
 	if (node->getTag() != -1)
@@ -55,7 +116,7 @@ void render_node_tree(CCNode* node, unsigned int index = 0) {
 	if (ImGui::IsItemHovered())
 		hovered_node = node;
 	if (is_open) {
-		auto children = node->getChildren();
+		auto children = node->CCNode::getChildren();
 		for (unsigned int i = 0; i < children_count; ++i) {
 			auto child = children->objectAtIndex(i);
 			render_node_tree(static_cast<CCNode*>(child), i);
@@ -76,9 +137,7 @@ void render_node_properties(CCNode* node) {
 	ImGui::Text("Addr: 0x%p", node);
 	ImGui::SameLine();
 	if (ImGui::Button("Copy##copyaddr")) {
-		std::stringstream stream;
-		stream << std::uppercase << std::hex << reinterpret_cast<uintptr_t>(node);
-		set_clipboard_text(stream.str());
+		geode::utils::clipboard::write(fmt::format("{:X}", reinterpret_cast<uintptr_t>(node)));
 	}
 	if (node->getUserData())
 		ImGui::Text("User data: 0x%p", node->getUserData());
@@ -180,7 +239,7 @@ void render_node_properties(CCNode* node) {
 
 	if (auto menu_item_node = dynamic_cast<CCMenuItem*>(node); menu_item_node) {
 		const auto selector = public_cast(menu_item_node, m_pfnSelector);
-		const auto addr = format_addr(union_cast<void*>(selector));
+		const auto addr = format_addr(geode::cast::union_cast<void*>(selector));
 		ImGui::Text("CCMenuItem selector: %s", addr.c_str());
 		ImGui::SameLine();
 		if (ImGui::Button("Copy##copyselector")) {
@@ -203,8 +262,8 @@ void render_node_highlight(CCNode* node, bool selected) {
 		float off_x, off_y, off_z;
 		camera->getEyeXYZ(&off_x, &off_y, &off_z);
 		const CCPoint offset(off_x, off_y);
-		bb_min -= offset;
-		bb_max -= offset;
+		bb_min = bb_min - offset;
+		bb_max = bb_max - offset;
 
 		camera_parent = camera_parent->getParent();
 	}
@@ -212,104 +271,4 @@ void render_node_highlight(CCNode* node, bool selected) {
 	auto min = cocos_to_vec2(parent ? parent->convertToWorldSpace(bb_min) : bb_min);
 	auto max = cocos_to_vec2(parent ? parent->convertToWorldSpace(bb_max) : bb_max);
 	foreground.AddRectFilled(min, max, selected ? IM_COL32(200, 200, 255, 60) : IM_COL32(255, 255, 255, 70));
-}
-
-bool show_window = false;
-static ImFont* g_font = nullptr;
-
-void draw() {
-	if (g_font) ImGui::PushFont(g_font);
-	if (show_window) {
-		static bool highlight = false;
-		hovered_node = nullptr;
-		if (ImGui::Begin("cocos2d explorer", nullptr, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_MenuBar)) {
-			if (ImGui::BeginMenuBar()) {
-				ImGui::MenuItem("Highlight", nullptr, &highlight);
-				ImGui::EndMenuBar();
-			}
-
-			const auto avail = ImGui::GetContentRegionAvail();
-
-			ImGui::BeginChild("explorer.tree", ImVec2(avail.x * 0.5f, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
-
-			auto node = CCDirector::sharedDirector()->getRunningScene();
-			reached_selected_node = false;
-			render_node_tree(node);
-			
-			ImGui::EndChild();
-
-			if (!reached_selected_node)
-				selected_node = nullptr;
-
-			ImGui::SameLine();
-
-			ImGui::BeginChild("explorer.options");
-
-			if (selected_node)
-				render_node_properties(selected_node);
-			else
-				ImGui::Text("Select a node to edit its properties :-)");
-
-			ImGui::EndChild();
-		}
-		ImGui::End();
-
-		if (highlight && (selected_node || hovered_node)) {
-			if (selected_node)
-				render_node_highlight(selected_node, true);
-			if (hovered_node)
-				render_node_highlight(hovered_node, false);
-		}
-	}
-
-	if (ImGui::GetTime() < 5.0) {
-		ImGui::SetNextWindowPos({10, 10});
-		ImGui::Begin("cocosexplorermsg", nullptr,
-			ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-			ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMouseInputs | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings);
-		ImGui::Text("Cocos explorer loaded, press F1 to toggle");
-		ImGui::End();
-	}
-	if (g_font) ImGui::PopFont();
-}
-
-void init() {
-	auto& style = ImGui::GetStyle();
-	style.WindowTitleAlign = ImVec2(0.5f, 0.5f);
-	style.WindowBorderSize = 0;
-	style.ColorButtonPosition = ImGuiDir_Left;
-
-	g_font = ImGui::GetIO().Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\consola.ttf", 14.f);
-
-	auto colors = style.Colors;
-	colors[ImGuiCol_FrameBg] = ImVec4(0.31f, 0.31f, 0.31f, 0.54f);
-	colors[ImGuiCol_FrameBgHovered] = ImVec4(0.59f, 0.59f, 0.59f, 0.40f);
-	colors[ImGuiCol_FrameBgActive] = ImVec4(0.61f, 0.61f, 0.61f, 0.67f);
-	colors[ImGuiCol_TitleBg] = colors[ImGuiCol_TitleBgActive] = ImVec4(0.2f, 0.2f, 0.2f, 1.00f);
-	colors[ImGuiCol_CheckMark] = ImVec4(0.89f, 0.89f, 0.89f, 1.00f);
-	colors[ImGuiCol_TextSelectedBg] = ImVec4(0.71f, 0.71f, 0.71f, 0.35f);
-}
-
-
-DWORD WINAPI my_thread(void* hModule) {
-	ImGuiHook::setRenderFunction(draw);
-	ImGuiHook::setToggleCallback([]() {
-		show_window = !show_window;
-	});
-	ImGuiHook::setInitFunction(init);
-	MH_Initialize();
-	ImGuiHook::setupHooks([](void* target, void* hook, void** trampoline) {
-		MH_CreateHook(target, hook, trampoline);
-	});
-	ImGuiHook::setKeybind(VK_F1);
-	MH_EnableHook(MH_ALL_HOOKS);
-	return 0;
-}
-
-BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID) {
-	if (reason == DLL_PROCESS_ATTACH) {
-		DisableThreadLibraryCalls(module);
-		CreateThread(0, 0, my_thread, module, 0, 0);
-	}
-	return TRUE;
 }

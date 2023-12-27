@@ -1,23 +1,27 @@
-cmake_minimum_required(VERSION 3.0.0)
-set(CMAKE_CXX_STANDARD 17)
+cmake_minimum_required(VERSION 3.21)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_OSX_ARCHITECTURES "x86_64")
+set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
-project(cocos-explorer)
+project(cocos-explorer VERSION 1.0.0)
 
-add_library(cocos-explorer SHARED src/main.cpp)
-
-target_include_directories(cocos-explorer PRIVATE
-  libraries/imgui-hook
-  libraries/imgui-hook/imgui
-  libraries/minhook/include
+file(GLOB SOURCES
+	src/*.cpp
 )
 
-add_subdirectory(libraries/minhook)
-add_subdirectory(libraries/imgui-hook)
-add_subdirectory(libraries/cocos-headers)
-target_link_libraries(cocos-explorer 
-  cocos2d
-  imgui-hook
-  minhook
-  opengl32
-)
+add_library(${PROJECT_NAME} SHARED ${SOURCES})
+
+if (NOT DEFINED ENV{GEODE_SDK})
+    message(FATAL_ERROR "Unable to find Geode SDK! Please define GEODE_SDK environment variable to point to Geode")
+else()
+    message(STATUS "Found Geode: $ENV{GEODE_SDK}")
+endif()
+
+add_subdirectory($ENV{GEODE_SDK} ${CMAKE_CURRENT_BINARY_DIR}/geode)
+
+CPMAddPackage("gh:matcool/gd-imgui-cocos#ce72528")
+
+target_link_libraries(${PROJECT_NAME} imgui-cocos)
+
+setup_geode_mod(${PROJECT_NAME})

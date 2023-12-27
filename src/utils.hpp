@@ -4,7 +4,15 @@ std::string get_module_name(HMODULE mod) {
 	char buffer[MAX_PATH];
 	if (!mod || !GetModuleFileNameA(mod, buffer, MAX_PATH))
 		return "Unknown";
-	return std::filesystem::path(buffer).filename().string();
+	return ghc::filesystem::path(buffer).filename().string();
+}
+
+const char* get_node_name(CCNode* node) {
+	// works because msvc's typeid().name() returns undecorated name
+	// typeid(CCNode).name() == "class cocos2d::CCNode"
+	// the + 6 gets rid of the class prefix
+	// "class cocos2d::CCNode" + 6 == "cocos2d::CCNode"
+	return typeid(*node).name() + 6;
 }
 
 std::string format_addr(void* addr) {
@@ -62,19 +70,10 @@ void set_clipboard_text(std::string_view text) {
 	CloseClipboard();
 }
 
-bool operator!=(const cocos2d::CCSize& a, const cocos2d::CCSize& b) { return a.width != b.width || a.height != b.height; }
 ImVec2 operator*(const ImVec2& vec, const float m) { return { vec.x * m, vec.y * m }; }
 ImVec2 operator/(const ImVec2& vec, const float m) { return { vec.x / m, vec.y / m }; }
 ImVec2 operator+(const ImVec2& a, const ImVec2& b) { return { a.x + b.x, a.y + b.y }; }
 ImVec2 operator-(const ImVec2& a, const ImVec2& b) { return { a.x - b.x, a.y - b.y }; }
-
-bool operator==(const cocos2d::CCPoint& a, const cocos2d::CCPoint& b) { return a.x == b.x && a.y == b.y; }
-bool operator==(const cocos2d::CCRect& a, const cocos2d::CCRect& b) { return a.origin == b.origin && a.size == b.size; }
-
-cocos2d::CCPoint& operator-=(cocos2d::CCPoint& point, const cocos2d::CCPoint& other) {
-	point = point - other;
-	return point;
-}
 
 ImVec2 cocos_to_vec2(const cocos2d::CCPoint& a) {
 	const auto size = ImGui::GetMainViewport()->Size;
